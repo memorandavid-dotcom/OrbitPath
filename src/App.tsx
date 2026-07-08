@@ -41,7 +41,9 @@ import {
   Palette,
   Receipt,
   Trash2,
-  Edit
+  Edit,
+  FileText,
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -91,8 +93,8 @@ function generateFakeQRMatrix(data: string): boolean[][] {
 
 const OrbitPathLogo = () => (
   <div className="relative w-10 h-10 flex items-center justify-center select-none shrink-0">
-    {/* Metallic glowing backdrop with planetary grid ring */}
-    <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-[0_0_8px_rgba(234,179,8,0.3)]" style={{ transformOrigin: 'center', animation: 'spin 12s linear infinite' }}>
+    {/* Metallic glowing backdrop with planetary grid ring - static and pristine */}
+    <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-[0_0_8px_rgba(234,179,8,0.3)]" style={{ transformOrigin: 'center' }}>
       {/* Outer Planet Orbital Ring */}
       <ellipse cx="50" cy="50" rx="46" ry="16" fill="none" stroke="#eab308" strokeWidth="2.5" strokeDasharray="6,4" opacity="0.8" transform="rotate(-25 50 50)" />
       {/* Intersecting secondary orbit */}
@@ -132,8 +134,13 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Sign In inputs
-  const [loginEmail, setLoginEmail] = useState<string>('david@orbitpath.com');
+  // === REMEMBER ME & CACHED LOGIN ===
+  const [rememberMe, setRememberMe] = useState<boolean>(() => {
+    return localStorage.getItem('orbit_remember_me') === 'true';
+  });
+  const [loginEmail, setLoginEmail] = useState<string>(() => {
+    return localStorage.getItem('orbit_remembered_email') || 'david@orbitpath.com';
+  });
   const [loginMpin, setLoginMpin] = useState<string>('');
 
   // Sign Up inputs
@@ -145,6 +152,122 @@ export default function App() {
   // TOS Modal state
   const [showTosModal, setShowTosModal] = useState<boolean>(false);
   const [tosContent, setTosContent] = useState<string>('Loading terms of service from the ledger...');
+
+  // === LOCALIZATION STATE ===
+  const [language, setLanguage] = useState<'en' | 'tl'>(() => {
+    return (localStorage.getItem('orbit_language') as any) || 'en';
+  });
+  const [timezone, setTimezone] = useState<'PHT' | 'UTC'>(() => {
+    return (localStorage.getItem('orbit_timezone') as any) || 'PHT';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('orbit_language', language);
+  }, [language]);
+
+  useEffect(() => {
+    localStorage.setItem('orbit_timezone', timezone);
+  }, [timezone]);
+
+  // Date and relative timestamp localization formatter
+  const getLocalizedText = (text: string) => {
+    if (language === 'tl') {
+      return text
+        .replace('Today', 'Ngayong Araw')
+        .replace('Yesterday', 'Kahapon')
+        .replace('Just now', 'Kasalukuyan')
+        .replace('Verified Account', 'Beripikadong Account')
+        .replace('Verified Tier 2', 'Beripikado (Tier 2)')
+        .replace('Developer Account', 'Account ng Developer')
+        .replace('Consumer User', 'Gumagamit')
+        .replace('SME Payout Account', 'SME Payout Account')
+        .replace('AM', 'N.U.')
+        .replace('PM', 'N.H.')
+        .replace('July', 'Hulyo')
+        .replace('Recent Activity', 'Kasalukuyang Aktibidad')
+        .replace('Earlier This Month', 'Mas Maaga Ngayong Buwan')
+        .replace('Official Transaction History', 'Opisyal na Kasaysayan ng Transaksyon');
+    }
+    return text;
+  };
+
+  const getLocalizedDate = (dateObj: Date) => {
+    const options: Intl.DateTimeFormatOptions = {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: timezone === 'PHT' ? 'Asia/Manila' : 'UTC'
+    };
+    const locale = language === 'tl' ? 'tl-PH' : 'en-US';
+    let formatted = dateObj.toLocaleString(locale, options);
+    if (language === 'tl') {
+      formatted = formatted
+        .replace('AM', 'N.U.')
+        .replace('PM', 'N.H.')
+        .replace('Jan', 'Ene')
+        .replace('Feb', 'Peb')
+        .replace('Mar', 'Mar')
+        .replace('Apr', 'Abr')
+        .replace('May', 'May')
+        .replace('Jun', 'Hun')
+        .replace('Jul', 'Hul')
+        .replace('Aug', 'Ago')
+        .replace('Sep', 'Set')
+        .replace('Oct', 'Okt')
+        .replace('Nov', 'Nob')
+        .replace('Dec', 'Dis');
+    }
+    return formatted;
+  };
+
+  // === NATIVE NOTIFICATION INFRASTRUCTURE ===
+  const [showNotifications, setShowNotifications] = useState<boolean>(false);
+  const [notifications, setNotifications] = useState([
+    {
+      id: 'notif_1',
+      title: "Payment Received",
+      description: "$250.00 USDC received from Alice Vance",
+      time: "Just now",
+      read: false,
+      type: "payout"
+    },
+    {
+      id: 'notif_2',
+      title: "Bill Due Notice",
+      description: "Metro Power & Light bill of $45.00 USDC due in 5 days",
+      time: "2 hours ago",
+      read: false,
+      type: "bill"
+    },
+    {
+      id: 'notif_3',
+      title: "Security Login Alert",
+      description: "New login detected from Chrome on Linux container",
+      time: "3 hours ago",
+      read: true,
+      type: "security"
+    },
+    {
+      id: 'notif_4',
+      title: "System Alert",
+      description: "OrbitPath decentralized routing engine synchronized with Stellar mainnet",
+      time: "1 day ago",
+      read: true,
+      type: "system"
+    }
+  ]);
+
+  // === LOCAL VIEW LEDGER CLEAR STATE ===
+  const [clearedTxIds, setClearedTxIds] = useState<string[]>([]);
+
+  // === PROGRESSIVE CONSUMER SEND MONEY FLOW STATES ===
+  const [sendStep, setSendStep] = useState<number>(1);
+  const [recipientNumber, setRecipientNumber] = useState<string>('');
+  const [selectedPlatform, setSelectedPlatform] = useState<string>('');
+  const [numberError, setNumberError] = useState<string | null>(null);
 
   // === RESPONSIVE VIEW NAVIGATION ===
   // Managed cleanly like high-end fintech interfaces (GCash, Maya, GoTyme)
@@ -681,6 +804,23 @@ export default function App() {
     }
   };
 
+  const handleViewReceipt = (tx: any) => {
+    setTxReceipt({
+      success: true,
+      hash: tx.hash,
+      message: getLocalizedText("Direct liquidity routing via decentralized regional gateways on OrbitPath."),
+      amountSent: tx.amountSent,
+      amountReceived: tx.amountReceived,
+      source: 'USDC Wallet',
+      target: tx.target,
+      recipient: tx.recipient,
+      details: tx.recipient + ' (' + tx.target + ')',
+      timestamp: tx.timestamp,
+      pathUsed: ['USDC', 'Stellar DEX', tx.target],
+      memo: tx.memo || 'Orbit_Remit_No_Memo'
+    });
+  };
+
   // === SUBMIT AUTHENTICATION: LOGIN ===
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -701,6 +841,16 @@ export default function App() {
         localStorage.setItem('orbit_auth_token', data.token);
         setAuthToken(data.token);
         setCurrentUser(data.user);
+        
+        // Cache Remember Me settings
+        if (rememberMe) {
+          localStorage.setItem('orbit_remember_me', 'true');
+          localStorage.setItem('orbit_remembered_email', loginEmail);
+        } else {
+          localStorage.setItem('orbit_remember_me', 'false');
+          localStorage.removeItem('orbit_remembered_email');
+        }
+
         showToast(`Welcome back, ${data.user.name}!`);
         setActiveTab('home');
       } else {
@@ -1053,6 +1203,19 @@ export default function App() {
                       />
                     </div>
                   </div>
+
+                  {/* Remember Me selection checkbox */}
+                  <div className="flex items-center justify-between pl-1">
+                    <label className="flex items-center gap-2 text-[10px] text-slate-450 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-905 text-indigo-600 focus:ring-0 focus:ring-offset-0"
+                      />
+                      Remember Me
+                    </label>
+                  </div>
                 </div>
 
                 {/* Quick helpers */}
@@ -1306,11 +1469,96 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 relative">
             <span className="text-[9px] bg-emerald-950/60 text-emerald-400 font-mono font-bold px-2.5 py-1 rounded-full border border-emerald-900/40 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
               Secure Session
             </span>
+
+            {/* Notification Infrastructure Bell Icon */}
+            <div className="relative">
+              <button
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="p-1.5 rounded-full hover:bg-slate-800/10 text-slate-400 hover:text-white transition-all relative flex items-center justify-center border border-transparent hover:border-slate-800"
+                title="System Notifications"
+              >
+                <Bell className="w-4 h-4" />
+                {notifications.some(n => !n.read) && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                )}
+              </button>
+
+              {/* Notification Overlay Panel */}
+              <AnimatePresence>
+                {showNotifications && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute right-0 mt-3 w-80 bg-slate-950 border border-slate-850 rounded-2xl p-4 shadow-2xl z-50 space-y-3 text-left"
+                  >
+                    <div className="flex justify-between items-center border-b border-slate-850 pb-2">
+                      <span className="text-xs font-black uppercase tracking-wider font-mono text-white">
+                        {getLocalizedText("System Notifications")}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setNotifications(notifications.map(n => ({ ...n, read: true })));
+                          showToast("All notifications marked as read.");
+                        }}
+                        className="text-[9px] font-mono text-indigo-400 hover:text-indigo-300 font-bold"
+                      >
+                        {getLocalizedText("Mark all read")}
+                      </button>
+                    </div>
+
+                    <div className="space-y-2.5 max-h-60 overflow-y-auto no-scrollbar">
+                      {notifications.length === 0 ? (
+                        <p className="text-[10px] text-slate-500 font-mono text-center py-4">
+                          No alerts or notifications.
+                        </p>
+                      ) : (
+                        notifications.map((notif) => (
+                          <div
+                            key={notif.id}
+                            onClick={() => {
+                              setNotifications(notifications.map(n => n.id === notif.id ? { ...n, read: true } : n));
+                            }}
+                            className={`p-2.5 rounded-xl border transition-all cursor-pointer flex gap-3 items-start text-left ${
+                              notif.read
+                                ? 'bg-slate-900/30 border-slate-900 text-slate-400'
+                                : 'bg-indigo-950/25 border-indigo-900/30 text-white'
+                            }`}
+                          >
+                            <div className="mt-0.5 shrink-0">
+                              {notif.type === 'payout' && <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-400" />}
+                              {notif.type === 'bill' && <CreditCard className="w-3.5 h-3.5 text-rose-400" />}
+                              {notif.type === 'security' && <Lock className="w-3.5 h-3.5 text-amber-400" />}
+                              {notif.type === 'system' && <Cpu className="w-3.5 h-3.5 text-indigo-400" />}
+                            </div>
+                            <div className="flex-1 space-y-0.5">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[10px] font-bold block">{getLocalizedText(notif.title)}</span>
+                                {!notif.read && <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>}
+                              </div>
+                              <p className="text-[9px] leading-relaxed block text-slate-350">{getLocalizedText(notif.description)}</p>
+                              <span className="text-[8px] font-mono text-slate-500 block mt-1">{getLocalizedText(notif.time)}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => setShowNotifications(false)}
+                      className="w-full bg-slate-900 hover:bg-slate-850 py-1.5 rounded-xl text-[10px] font-mono text-slate-400 hover:text-white transition-all text-center border border-slate-800"
+                    >
+                      {getLocalizedText("Close Panel")}
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             {/* Desktop Quick Scan button */}
             <button
@@ -1319,6 +1567,15 @@ export default function App() {
             >
               <Camera className="w-3.5 h-3.5" />
               Scan QR
+            </button>
+
+            {/* Universal Logout option */}
+            <button
+              onClick={handleLogout}
+              className="p-1.5 rounded-full hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 border border-transparent hover:border-rose-900/30 transition-all flex items-center justify-center"
+              title="Secure Logout"
+            >
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -1354,7 +1611,7 @@ export default function App() {
                     <div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs font-black block" style={{ color: 'var(--text-main)' }}>Hi, {currentUser.name}!</span>
-                        <span className="text-[8px] bg-indigo-950 text-indigo-300 border border-indigo-900 font-bold px-1.5 py-0.5 rounded-full uppercase">
+                        <span className="text-[8px] bg-indigo-950 text-white border border-indigo-900 font-bold px-1.5 py-0.5 rounded-full uppercase">
                           Verified Tier 2
                         </span>
                       </div>
@@ -1364,7 +1621,7 @@ export default function App() {
 
                   <div className="text-right">
                     <span className="text-[9px] block font-mono uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Account ID</span>
-                    <span className="text-[10px] text-indigo-300 font-mono bg-indigo-950/40 px-2.5 py-1 rounded border border-indigo-900/30 font-bold uppercase mt-1 inline-block">
+                    <span className="text-[10px] text-indigo-100 font-mono bg-indigo-950/40 px-2.5 py-1 rounded border border-indigo-900/30 font-bold uppercase mt-1 inline-block">
                       {currentUser.maskedAddress}
                     </span>
                   </div>
@@ -1551,180 +1808,300 @@ export default function App() {
                         <Send className="w-4 h-4" />
                       </div>
                       <h2 className="text-xs font-black text-white uppercase tracking-wider pl-0.5">
-                        Express Send Money
+                        {sendStep === 1 && getLocalizedText("Step 1: Recipient & Platform")}
+                        {sendStep === 2 && getLocalizedText("Step 2: Transfer Amount")}
+                        {sendStep === 3 && getLocalizedText("Step 3: Review & Broadcast")}
                       </h2>
                     </div>
                     <span className="text-[8px] text-slate-400 font-mono font-bold uppercase tracking-wider bg-slate-950/80 px-2 py-0.5 rounded">
-                      Optimized Payment Engine
+                      {getLocalizedText("Instant Settlement")}
                     </span>
                   </div>
 
-                  <div className="space-y-4">
-                    
-                    {/* Amount to Send Input */}
-                    <div className="bg-slate-950/80 rounded-2xl p-4.5 border border-slate-850 relative">
-                      <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block font-mono pl-0.5">
-                        Amount to Send (USD equivalent)
-                      </span>
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center">
-                          <span className="text-xl font-bold text-slate-500 mr-1 font-mono">$</span>
-                          <input
-                            type="number"
-                            value={amountToSend}
-                            onChange={(e) => setAmountToSend(Math.max(1, parseFloat(e.target.value) || 0))}
-                            className="bg-transparent text-xl font-extrabold text-white focus:outline-none w-44 font-mono"
-                          />
-                        </div>
-                        <div className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1 text-xs font-bold text-indigo-300 font-mono select-none">
-                          USDC Token
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Recipient Receives calculation */}
-                    <div className="bg-emerald-950/30 rounded-2xl p-4.5 border border-emerald-900/30 relative">
-                      <span className="text-[9px] text-emerald-400 font-extrabold uppercase tracking-wider block font-mono pl-0.5">
-                        Recipient Receives (Guaranteed Local Payout)
-                      </span>
-                      <div className="flex items-center justify-between mt-2.5">
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-lg font-black text-emerald-500 font-mono">
-                            {destAsset === 'PHP' ? '₱' : destAsset === 'NGN' ? '₦' : destAsset === 'EUR' ? '€' : 'R$'}
-                          </span>
-                          <span className="text-xl font-black text-emerald-400 font-mono">
-                            {convertedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                        
-                        {/* Selector */}
-                        <select
-                          value={destAsset}
-                          onChange={(e) => setDestAsset(e.target.value as any)}
-                          className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        >
-                          <option value="PHP">PHP (Philippines)</option>
-                          <option value="NGN">NGN (Nigeria)</option>
-                          <option value="EUR">EUR (Eurozone)</option>
-                          <option value="BRL">BRL (Brazil)</option>
-                        </select>
-                      </div>
-
-                      <div className="mt-3 pt-2.5 border-t border-emerald-900/20 flex justify-between items-center text-[9px] text-emerald-500 font-mono">
-                        <span>Guaranteed Conversion:</span>
-                        <span className="font-bold">1 USDC = {conversionRate} {destAsset}</span>
-                      </div>
-                    </div>
-
-                    {/* Recipient Legal details */}
-                    <div className="space-y-4 pt-1">
+                  {/* STEP 1: RECIPIENT PHONE / ACCOUNT & PLATFORM GRID */}
+                  {sendStep === 1 && (
+                    <div className="space-y-4">
                       <div>
                         <label className="block text-[9px] text-slate-400 font-extrabold uppercase tracking-wider mb-1.5 pl-0.5 font-mono">
-                          Recipient Full Legal Name
+                          {getLocalizedText("Recipient Phone or Account Number")}
                         </label>
                         <div className="relative">
                           <span className="absolute left-3.5 top-3.5 text-slate-500">
-                            <User className="w-3.5 h-3.5" />
+                            <Phone className="w-3.5 h-3.5" />
                           </span>
                           <input
                             type="text"
-                            value={recipientName}
-                            onChange={(e) => setRecipientName(e.target.value)}
-                            className="w-full bg-slate-950/60 border border-slate-800 rounded-xl pl-10 pr-3.5 py-3 text-xs text-white font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                            placeholder="Enter legal name"
+                            value={recipientNumber}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setRecipientNumber(val);
+                              // Validation: 9-13 digits
+                              const numOnly = val.replace(/\D/g, '');
+                              if (val.length > 0 && (numOnly.length < 9 || numOnly.length > 13)) {
+                                setNumberError("Invalid number format. Please check and try again.");
+                              } else {
+                                setNumberError(null);
+                              }
+                            }}
+                            className="w-full bg-slate-950/60 border border-slate-800 rounded-xl pl-10 pr-3.5 py-3 text-xs text-white font-bold font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            placeholder="e.g. 09171234567 or 123-456-789"
                           />
+                        </div>
+                        {numberError && (
+                          <span className="text-red-500 text-[10px] font-bold block mt-1.5 pl-0.5">
+                            {numberError}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Interactive Platform Grid */}
+                      <div className="space-y-2">
+                        <label className="block text-[9px] text-slate-400 font-extrabold uppercase tracking-wider pl-0.5 font-mono">
+                          {getLocalizedText("Select Destination Platform")}
+                        </label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { id: 'gcash', name: 'GCash', desc: 'E-Wallet', color: 'border-blue-500/20 hover:bg-blue-950/20 hover:border-blue-500/40 text-blue-400 bg-blue-950/5' },
+                            { id: 'instapay', name: 'InstaPay', desc: 'Bank Net', color: 'border-indigo-500/20 hover:bg-indigo-950/20 hover:border-indigo-500/40 text-indigo-400 bg-indigo-950/5' },
+                            { id: 'maya', name: 'Maya', desc: 'Fintech', color: 'border-emerald-500/20 hover:bg-emerald-950/20 hover:border-emerald-500/40 text-emerald-400 bg-emerald-950/5' }
+                          ].map((plat) => {
+                            const isSel = selectedPlatform === plat.id;
+                            return (
+                              <button
+                                key={plat.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedPlatform(plat.id);
+                                  setRecipientDetails(`${recipientNumber} (${plat.name})`);
+                                }}
+                                className={`border rounded-xl p-3 flex flex-col items-center text-center gap-1 transition-all ${
+                                  isSel
+                                    ? 'bg-indigo-600 border-indigo-500 text-white font-black scale-102 shadow-md'
+                                    : plat.color
+                                }`}
+                              >
+                                <span className="text-xs font-black block">{plat.name}</span>
+                                <span className={`text-[8px] font-mono block ${isSel ? 'text-indigo-200' : 'text-slate-500'}`}>{plat.desc}</span>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-3.5">
-                        <div>
-                          <label className="block text-[9px] text-slate-400 font-extrabold uppercase tracking-wider mb-1.5 pl-0.5 font-mono">
-                            Payout Bank Account or Wallet ID
-                          </label>
-                          <input
-                            type="text"
-                            value={recipientDetails}
-                            onChange={(e) => setRecipientDetails(e.target.value)}
-                            className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-3.5 py-3 text-xs text-white font-mono font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                          />
-                        </div>
+                      <button
+                        type="button"
+                        onClick={() => setSendStep(2)}
+                        disabled={!recipientNumber || !!numberError || !selectedPlatform}
+                        className={`w-full py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                          !recipientNumber || !!numberError || !selectedPlatform
+                            ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                            : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg'
+                        }`}
+                      >
+                        {getLocalizedText("Continue to Amount")}
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
 
-                        <div>
-                          <label className="block text-[9px] text-slate-400 font-extrabold uppercase tracking-wider mb-1.5 pl-0.5 font-mono">
-                            Remittance Transfer Speed
-                          </label>
-                          <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800">
-                            <button
-                              type="button"
-                              onClick={() => setDeliveryMethod('bank')}
-                              className={`py-2 text-[10px] font-bold rounded-lg transition-all ${
-                                deliveryMethod === 'bank' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'
-                              }`}
-                            >
-                              Instant Local Network
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeliveryMethod('cash')}
-                              className={`py-2 text-[10px] font-bold rounded-lg transition-all ${
-                                deliveryMethod === 'cash' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'
-                              }`}
-                            >
-                              Cash Agent Pick-Up
-                            </button>
+                  {/* STEP 2: AMOUNT & FX CALCULATION */}
+                  {sendStep === 2 && (
+                    <div className="space-y-4">
+                      {/* Amount to Send Input */}
+                      <div className="bg-slate-950/80 rounded-2xl p-4.5 border border-slate-850 relative">
+                        <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block font-mono pl-0.5">
+                          {getLocalizedText("Amount to Send (USD equivalent)")}
+                        </span>
+                        <div className="flex items-center justify-between mt-2">
+                          <div className="flex items-center">
+                            <span className="text-xl font-bold text-slate-500 mr-1 font-mono">$</span>
+                            <input
+                              type="number"
+                              value={amountToSend}
+                              onChange={(e) => setAmountToSend(Math.max(1, parseFloat(e.target.value) || 0))}
+                              className="bg-transparent text-xl font-extrabold text-white focus:outline-none w-44 font-mono"
+                            />
+                          </div>
+                          <div className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1 text-xs font-bold text-indigo-300 font-mono select-none">
+                            USDC Token
                           </div>
                         </div>
                       </div>
 
-                      <div>
-                        <label className="block text-[9px] text-slate-400 font-extrabold uppercase tracking-wider mb-1.5 pl-0.5 font-mono">
-                          Remittance Memo Reference (Optional)
-                        </label>
-                        <input
-                          type="text"
-                          value={memoString}
-                          onChange={(e) => setMemoString(e.target.value)}
-                          className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-300 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Dynamic optimized rate details warning */}
-                    <div className="bg-indigo-950/50 border border-indigo-900/30 rounded-2xl p-4 flex items-start gap-3 text-[10px] text-slate-300 leading-relaxed">
-                      <Info className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-                      <div>
-                        OrbitPath algorithms calculated an optimal exchange route using secure regional partner pools.
-                        <span className="font-bold block mt-1 text-indigo-300 font-mono">
-                          No intermediate bank delays • Estimated Slippage Bounds: Locked at &lt; 0.5%
+                      {/* Recipient Receives calculation */}
+                      <div className="bg-emerald-950/30 rounded-2xl p-4.5 border border-emerald-900/30 relative">
+                        <span className="text-[9px] text-emerald-400 font-extrabold uppercase tracking-wider block font-mono pl-0.5">
+                          {getLocalizedText("Recipient Receives (Guaranteed Payout)")}
                         </span>
+                        <div className="flex items-center justify-between mt-2.5">
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-lg font-black text-emerald-500 font-mono">
+                              {destAsset === 'PHP' ? '₱' : destAsset === 'NGN' ? '₦' : destAsset === 'EUR' ? '€' : 'R$'}
+                            </span>
+                            <span className="text-xl font-black text-emerald-400 font-mono">
+                              {convertedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          
+                          {/* Selector */}
+                          <select
+                            value={destAsset}
+                            onChange={(e) => setDestAsset(e.target.value as any)}
+                            className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          >
+                            <option value="PHP">PHP (Philippines)</option>
+                            <option value="NGN">NGN (Nigeria)</option>
+                            <option value="EUR">EUR (Eurozone)</option>
+                            <option value="BRL">BRL (Brazil)</option>
+                          </select>
+                        </div>
+
+                        <div className="mt-3 pt-2.5 border-t border-emerald-900/20 flex justify-between items-center text-[9px] text-emerald-500 font-mono">
+                          <span>{getLocalizedText("Guaranteed Conversion:")}</span>
+                          <span className="font-bold">1 USDC = {conversionRate} {destAsset}</span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setSendStep(1)}
+                          className="py-3.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-slate-950 border border-slate-800 hover:bg-slate-900 transition-all text-center"
+                        >
+                          {getLocalizedText("Back")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSendStep(3)}
+                          className="py-3.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition-all text-center shadow-lg"
+                        >
+                          {getLocalizedText("Continue")}
+                        </button>
                       </div>
                     </div>
+                  )}
 
-                    {/* Submit Button */}
-                    <button
-                      type="button"
-                      onClick={handleExecuteTransfer}
-                      disabled={isSending}
-                      className={`w-full py-4 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 ${
-                        isSending
-                          ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white shadow-indigo-600/15'
-                      }`}
-                    >
-                      {isSending ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          Broadcasting secure swap...
-                        </>
-                      ) : (
-                        <>
-                          <Send className="w-3.5 h-3.5" />
-                          Confirm Transfer Payout
-                        </>
-                      )}
-                    </button>
+                  {/* STEP 3: RECIPIENT INFORMATION & PREVIEW PROOF */}
+                  {sendStep === 3 && (
+                    <div className="space-y-4">
+                      {/* Preview Summary Card */}
+                      <div className="bg-slate-950 border border-slate-850 rounded-2xl p-4 space-y-2.5">
+                        <span className="text-[9px] text-indigo-400 font-mono font-black uppercase tracking-wider block">
+                          {getLocalizedText("REMITTANCE TRANSACTION PREVIEW")}
+                        </span>
+                        <div className="grid grid-cols-2 gap-y-2 text-[11px] font-mono border-t border-slate-850 pt-2">
+                          <span className="text-slate-500">{getLocalizedText("Destination Network")}</span>
+                          <span className="text-white text-right font-bold uppercase">{selectedPlatform}</span>
 
-                  </div>
+                          <span className="text-slate-500">{getLocalizedText("Recipient Account")}</span>
+                          <span className="text-white text-right font-bold">{recipientNumber}</span>
+
+                          <span className="text-slate-500">{getLocalizedText("Transfer Debit")}</span>
+                          <span className="text-white text-right font-black text-indigo-300">${amountToSend.toFixed(2)} USDC</span>
+
+                          <span className="text-slate-500">{getLocalizedText("Guaranteed Local Payout")}</span>
+                          <span className="text-white text-right font-black text-emerald-400">
+                            {destAsset === 'PHP' ? '₱' : destAsset === 'NGN' ? '₦' : destAsset === 'EUR' ? '€' : 'R$'} {convertedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Recipient Legal details */}
+                      <div className="space-y-3.5 pt-1">
+                        <div>
+                          <label className="block text-[9px] text-slate-400 font-extrabold uppercase tracking-wider mb-1.5 pl-0.5 font-mono">
+                            {getLocalizedText("Recipient Full Legal Name")}
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3.5 top-3.5 text-slate-500">
+                              <User className="w-3.5 h-3.5" />
+                            </span>
+                            <input
+                              type="text"
+                              value={recipientName}
+                              onChange={(e) => setRecipientName(e.target.value)}
+                              className="w-full bg-slate-950/60 border border-slate-800 rounded-xl pl-10 pr-3.5 py-3 text-xs text-white font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                              placeholder="Enter legal name"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-3.5">
+                          <div>
+                            <label className="block text-[9px] text-slate-400 font-extrabold uppercase tracking-wider mb-1.5 pl-0.5 font-mono">
+                              {getLocalizedText("Remittance Transfer Speed")}
+                            </label>
+                            <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800">
+                              <button
+                                type="button"
+                                onClick={() => setDeliveryMethod('bank')}
+                                className={`py-2 text-[10px] font-bold rounded-lg transition-all ${
+                                  deliveryMethod === 'bank' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'
+                                }`}
+                              >
+                                {getLocalizedText("Instant Local Network")}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeliveryMethod('cash')}
+                                className={`py-2 text-[10px] font-bold rounded-lg transition-all ${
+                                  deliveryMethod === 'cash' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'
+                                }`}
+                              >
+                                {getLocalizedText("Cash Agent Pick-Up")}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[9px] text-slate-400 font-extrabold uppercase tracking-wider mb-1.5 pl-0.5 font-mono">
+                            {getLocalizedText("Remittance Memo Reference (Optional)")}
+                          </label>
+                          <input
+                            type="text"
+                            value={memoString}
+                            onChange={(e) => setMemoString(e.target.value)}
+                            className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-300 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Submit & Back Buttons */}
+                      <div className="grid grid-cols-4 gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setSendStep(2)}
+                          disabled={isSending}
+                          className="col-span-1 py-4 rounded-2xl text-xs font-bold text-slate-400 bg-slate-950 border border-slate-850 hover:bg-slate-900 transition-all flex items-center justify-center"
+                        >
+                          {getLocalizedText("Back")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleExecuteTransfer}
+                          disabled={isSending || !recipientName}
+                          className={`col-span-3 py-4 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 ${
+                            isSending || !recipientName
+                              ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                              : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white shadow-indigo-600/15'
+                          }`}
+                        >
+                          {isSending ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              {getLocalizedText("Broadcasting...")}
+                            </>
+                          ) : (
+                            <>
+                              <Send className="w-3.5 h-3.5" />
+                              {getLocalizedText("Confirm & Send")}
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Simulated 6-Step pipeline logger */}
@@ -1789,91 +2166,120 @@ export default function App() {
                 <div className="bg-slate-900/70 border border-slate-850 rounded-3xl p-5 shadow-xl space-y-4 flex-1 flex flex-col">
                   <div className="flex justify-between items-center border-b border-slate-850 pb-3 shrink-0">
                     <span className="text-xs font-black uppercase tracking-wider font-mono text-white">
-                      Official Transaction History
+                      {getLocalizedText("Official Transaction History")}
                     </span>
-                    <span className="text-[8px] font-mono bg-indigo-950/80 text-indigo-300 border border-indigo-900/30 px-2.5 py-1 rounded-full uppercase font-bold">
-                      Direct Asset Conversions
-                    </span>
+                    <button
+                      onClick={() => {
+                        const visibleIds = history.map(tx => tx.id);
+                        setClearedTxIds(prev => [...prev, ...visibleIds]);
+                        showToast(getLocalizedText("Transaction view logs cleared locally."));
+                      }}
+                      className="text-[9px] font-mono bg-rose-950/45 hover:bg-rose-955 border border-rose-900/50 hover:border-rose-800 text-rose-350 px-2.5 py-1.5 rounded-xl font-bold transition-all uppercase tracking-wider cursor-pointer"
+                    >
+                      {getLocalizedText("Clear View")}
+                    </button>
                   </div>
 
                   {/* Date Categories grouped lists */}
-                  <div className="space-y-5 overflow-y-auto no-scrollbar pr-1">
+                  <div className="space-y-5 overflow-y-auto no-scrollbar pr-1 flex-1">
                     
                     {/* Today Section */}
-                    <div className="space-y-3">
-                      <span className="text-[9px] text-slate-500 font-mono font-black uppercase tracking-wider block pl-1">
-                        Recent Activity
-                      </span>
-                      <div className="divide-y divide-slate-850">
-                        {history.filter(tx => tx.timestamp.includes('Today') || tx.timestamp.includes('now')).map((tx) => (
-                          <div key={tx.id} className="py-3.5 flex justify-between items-center first:pt-0 last:pb-0">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-slate-300 shrink-0">
-                                <Send className="w-4 h-4 text-indigo-400" />
-                              </div>
-                              <div>
-                                <span className="text-xs font-black text-white block leading-tight">{tx.recipient}</span>
-                                <span className="text-[9px] text-slate-400 block mt-1 font-mono">
-                                  {tx.timestamp} • Ref: {tx.hash.slice(0, 11)}...
-                                </span>
-                                {tx.memo && (
-                                  <span className="text-[8px] bg-slate-950 text-indigo-300 px-2 py-0.5 rounded border border-slate-850 mt-1.5 inline-block font-mono">
-                                    Memo: {tx.memo}
+                    {history.filter(tx => !clearedTxIds.includes(tx.id) && (tx.timestamp.includes('Today') || tx.timestamp.includes('now'))).length > 0 && (
+                      <div className="space-y-3">
+                        <span className="text-[9px] text-slate-500 font-mono font-black uppercase tracking-wider block pl-1">
+                          {getLocalizedText("Recent Activity")}
+                        </span>
+                        <div className="divide-y divide-slate-850">
+                          {history.filter(tx => !clearedTxIds.includes(tx.id) && (tx.timestamp.includes('Today') || tx.timestamp.includes('now'))).map((tx) => (
+                            <div key={tx.id} className="py-3.5 flex justify-between items-center first:pt-0 last:pb-0 gap-2">
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <button
+                                  onClick={() => handleViewReceipt(tx)}
+                                  className="w-9 h-9 rounded-full bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0 transition-all cursor-pointer"
+                                  title="View digital receipt"
+                                >
+                                  <FileText className="w-4 h-4" />
+                                </button>
+                                <div className="truncate">
+                                  <span className="text-xs font-black text-white block leading-tight truncate">{tx.recipient}</span>
+                                  <span className="text-[9px] text-slate-400 block mt-1 font-mono">
+                                    {tx.timestamp} • Ref: {tx.hash.slice(0, 11)}...
                                   </span>
-                                )}
+                                  {tx.memo && (
+                                    <span className="text-[8px] bg-slate-950 text-indigo-300 px-2 py-0.5 rounded border border-slate-850 mt-1.5 inline-block font-mono">
+                                      Memo: {tx.memo}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="text-right shrink-0">
+                                <span className="text-xs font-black text-white block leading-tight">
+                                  -${tx.amountSent.toFixed(2)} USDC
+                                </span>
+                                <span className="text-[9px] font-extrabold text-emerald-400 block mt-1 font-mono">
+                                  +{tx.amountReceived.toLocaleString(undefined, { minimumFractionDigits: 2 })} {tx.target}
+                                </span>
                               </div>
                             </div>
-
-                            <div className="text-right shrink-0">
-                              <span className="text-xs font-black text-white block leading-tight">
-                                -${tx.amountSent.toFixed(2)} USDC
-                              </span>
-                              <span className="text-[9px] font-extrabold text-emerald-400 block mt-1 font-mono">
-                                +{tx.amountReceived.toLocaleString(undefined, { minimumFractionDigits: 2 })} {tx.target}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Earlier Week Section */}
-                    <div className="space-y-3 pt-2">
-                      <span className="text-[9px] text-slate-500 font-mono font-black uppercase tracking-wider block pl-1">
-                        Earlier This Month
-                      </span>
-                      <div className="divide-y divide-slate-850">
-                        {history.filter(tx => !tx.timestamp.includes('Today') && !tx.timestamp.includes('now')).map((tx) => (
-                          <div key={tx.id} className="py-3.5 flex justify-between items-center first:pt-0 last:pb-0">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 shrink-0">
-                                <Send className="w-4 h-4" />
-                              </div>
-                              <div>
-                                <span className="text-xs font-black text-white block leading-tight">{tx.recipient}</span>
-                                <span className="text-[9px] text-slate-400 block mt-1 font-mono">
-                                  {tx.timestamp} • Ref: {tx.hash.slice(0, 11)}...
-                                </span>
-                                {tx.memo && (
-                                  <span className="text-[8px] bg-slate-950 text-slate-400 px-2 py-0.5 rounded border border-slate-850 mt-1.5 inline-block font-mono">
-                                    Memo: {tx.memo}
+                    {history.filter(tx => !clearedTxIds.includes(tx.id) && !tx.timestamp.includes('Today') && !tx.timestamp.includes('now')).length > 0 && (
+                      <div className="space-y-3 pt-2">
+                        <span className="text-[9px] text-slate-500 font-mono font-black uppercase tracking-wider block pl-1">
+                          {getLocalizedText("Earlier This Month")}
+                        </span>
+                        <div className="divide-y divide-slate-850">
+                          {history.filter(tx => !clearedTxIds.includes(tx.id) && !tx.timestamp.includes('Today') && !tx.timestamp.includes('now')).map((tx) => (
+                            <div key={tx.id} className="py-3.5 flex justify-between items-center first:pt-0 last:pb-0 gap-2">
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <button
+                                  onClick={() => handleViewReceipt(tx)}
+                                  className="w-9 h-9 rounded-full bg-slate-800 hover:bg-slate-750 flex items-center justify-center text-slate-400 hover:text-white shrink-0 transition-all cursor-pointer"
+                                  title="View digital receipt"
+                                >
+                                  <FileText className="w-4 h-4" />
+                                </button>
+                                <div className="truncate">
+                                  <span className="text-xs font-black text-white block leading-tight truncate">{tx.recipient}</span>
+                                  <span className="text-[9px] text-slate-400 block mt-1 font-mono">
+                                    {tx.timestamp} • Ref: {tx.hash.slice(0, 11)}...
                                   </span>
-                                )}
+                                  {tx.memo && (
+                                    <span className="text-[8px] bg-slate-950 text-slate-400 px-2 py-0.5 rounded border border-slate-850 mt-1.5 inline-block font-mono">
+                                      Memo: {tx.memo}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="text-right shrink-0">
+                                <span className="text-xs font-black text-white block leading-tight">
+                                  -${tx.amountSent.toFixed(2)} USDC
+                                </span>
+                                <span className="text-[9px] font-extrabold text-emerald-400 block mt-1 font-mono">
+                                  +{tx.amountReceived.toLocaleString(undefined, { minimumFractionDigits: 2 })} {tx.target}
+                                </span>
                               </div>
                             </div>
-
-                            <div className="text-right shrink-0">
-                              <span className="text-xs font-black text-white block leading-tight">
-                                -${tx.amountSent.toFixed(2)} USDC
-                              </span>
-                              <span className="text-[9px] font-extrabold text-emerald-400 block mt-1 font-mono">
-                                +{tx.amountReceived.toLocaleString(undefined, { minimumFractionDigits: 2 })} {tx.target}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
+
+                    {/* Fallback Empty State */}
+                    {history.filter(tx => !clearedTxIds.includes(tx.id)).length === 0 && (
+                      <div className="text-center py-12 space-y-2.5">
+                        <FileText className="w-8 h-8 text-slate-600 mx-auto opacity-40 animate-pulse" />
+                        <p className="text-[10px] text-slate-450 leading-relaxed font-mono">
+                          {getLocalizedText("Local transaction history is clear.")}
+                        </p>
+                      </div>
+                    )}
 
                   </div>
                 </div>
@@ -1900,10 +2306,10 @@ export default function App() {
                     <h3 className="text-sm font-black text-white block">{currentUser.name}</h3>
                     <p className="text-[10px] text-slate-400 font-mono block mt-1">{currentUser.email}</p>
                     <div className="flex justify-center gap-2 mt-2">
-                      <span className="text-[9px] bg-indigo-900/60 text-indigo-300 font-bold px-2.5 py-0.5 rounded border border-indigo-800/40">
+                      <span className="text-[9px] bg-indigo-900/80 text-white font-bold px-2.5 py-0.5 rounded border border-indigo-750">
                         {currentUser.role}
                       </span>
-                      <span className="text-[9px] bg-emerald-950/60 text-emerald-400 font-bold px-2.5 py-0.5 rounded border border-emerald-900/40">
+                      <span className="text-[9px] bg-emerald-900 text-white font-bold px-2.5 py-0.5 rounded border border-emerald-700">
                         Fully Verified
                       </span>
                     </div>
@@ -2792,15 +3198,29 @@ export default function App() {
                   "{txReceipt.message}"
                 </div>
 
-                <button
-                  onClick={() => {
-                    setTxReceipt(null);
-                    setActiveTab('home');
-                  }}
-                  className="w-full py-3 bg-slate-950 hover:bg-slate-850 text-white rounded-xl text-xs font-bold uppercase transition-all min-h-[44px] border border-slate-800"
-                >
-                  Back to Wallet
-                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => {
+                      showToast(getLocalizedText("Generating high-fidelity receipt PDF..."));
+                      setTimeout(() => {
+                        showToast(getLocalizedText("Digital payment slip downloaded successfully!"));
+                      }, 1200);
+                    }}
+                    className="py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl text-xs font-bold uppercase transition-all min-h-[44px] flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-600/15 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    {getLocalizedText("Download")}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTxReceipt(null);
+                      setActiveTab('home');
+                    }}
+                    className="py-3 bg-slate-950 hover:bg-slate-850 text-slate-350 rounded-xl text-xs font-bold uppercase transition-all min-h-[44px] border border-slate-850 cursor-pointer"
+                  >
+                    {getLocalizedText("Close")}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
